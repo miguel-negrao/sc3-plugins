@@ -107,6 +107,7 @@ set(PLUGIN_DIRS
     TagSystemUGens
     VBAPUGens
     VOSIMUGens
+    BEASTMulchPV
 )
 
 # plugins with extra lib
