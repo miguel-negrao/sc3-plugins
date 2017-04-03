@@ -104,6 +104,12 @@ struct SoftClipAmp8 : public Oversamp8 {};
 struct SoftClipAmp4 : public Oversamp4 {};
 struct DriveNoise : public Unit {};
 
+struct LFPulse8 : public Oversamp8 {
+    double mPhase;
+    float mFreqMul, mDuty;
+};
+
+
 
 
 extern "C"  {
@@ -182,6 +188,11 @@ void SoftClipAmp4_next(SoftClipAmp4 *unit, int inNumSamples);
 
 void DriveNoise_Ctor(DriveNoise *unit);
 void DriveNoise_next(DriveNoise *unit, int inNumSamples);
+
+void LFPulse8_Ctor(LFPulse8 *unit);
+void LFPulse8_next_a(LFPulse8 *unit, int inNumSamples);
+void LFPulse8_next_k(LFPulse8 *unit, int inNumSamples);
+
 
 }
 
@@ -1308,6 +1319,88 @@ OSTrunc8_next (OSTrunc8 *unit, int inNumSamples)
   DOWNSAMPLE8;
 }
 
+void LFPulse8_Ctor(LFPulse8 *unit)
+{
+    OVERSAMPLE8_INIT;
+
+    if (INRATE(0) == calc_FullRate) {
+        SETCALC(LFPulse8_next_a);
+    } else {
+        SETCALC(LFPulse8_next_k);
+    }
+
+    unit->mFreqMul = unit->mRate->mSampleDur;
+    unit->mPhase = ZIN0(1);
+    unit->mDuty = ZIN0(2);
+
+    LFPulse8_next_k(unit, 1);
+}
+
+void LFPulse8_next_a(LFPulse8 *unit, int inNumSamples)
+{
+    float *out = ZOUT(0);
+    float *in = ZIN(0); //freq
+    float nextDuty = ZIN0(2);
+    float duty = unit->mDuty;
+
+    float freqmul = unit->mFreqMul;
+    double phase = unit->mPhase;
+
+    UPSAMPLE8;
+
+    for (int j=0; j<(inNumSamples*8); j++) {
+        float z;
+        if (phase >= 1.f) {
+            phase -= 1.f;
+            duty = unit->mDuty = nextDuty;
+            // output at least one sample from the opposite polarity
+            z = duty <= 0.5f ? 1.f : -1.f;
+        } else {
+            z = phase < duty ? 1.f : -1.f;
+        }
+
+        //domemoff[j] -> freq input
+        phase += domemoff[j] / 8 * freqmul;
+        domemoff[j] = z;
+    }
+
+    DOWNSAMPLE8;
+
+    unit->mPhase = phase;
+}
+
+void LFPulse8_next_k(LFPulse8 *unit, int inNumSamples)
+{
+    float *out = ZOUT(0);
+    float freq = ZIN0(0) * unit->mFreqMul / 8;
+    float nextDuty = ZIN0(2);
+    float duty = unit->mDuty;
+
+    double phase = unit->mPhase;
+
+    float *upmem = unit->m_upmem; \
+    float *domemoff = unit->m_domem+72; \
+    int oversampidx = 0;\
+
+    for (int j=0; j<(inNumSamples*8); j++) {
+        float z;
+        if (phase >= 1.f) {
+            phase -= 1.f;
+            duty = unit->mDuty = nextDuty;
+            // output at least one sample from the opposite polarity
+            z = duty <= 0.5f ? 1.f : -1.f;
+        } else {
+            z = phase < duty ? 1.f : -1.f;
+        }
+        phase += freq;
+        domemoff[j] = z;
+    }
+
+    DOWNSAMPLE8;
+
+    unit->mPhase = phase;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////
 
@@ -1334,6 +1427,8 @@ PluginLoad(Berlach)
   DefineDtorUnit(SoftClipAmp8);
   DefineDtorUnit(SoftClipAmp4);
   DefineSimpleUnit(DriveNoise);
+
+  DefineSimpleUnit(LFPulse8);
 
 
 }

@@ -12,6 +12,18 @@ Clipper8 : UGen {
 	}
 }
 
+LFPulse8 : PureUGen {
+	*ar {
+		arg freq = 440.0, iphase = 0.0, width = 0.5, mul = 1.0, add = 0.0;
+		^this.multiNew('audio', freq, iphase, width).madd(mul, add)
+	}
+	*kr {
+		arg freq = 440.0, iphase = 0.0, width = 0.5, mul = 1.0, add = 0.0;
+		^this.multiNew('control', freq, iphase, width).madd(mul, add)
+	}
+	signalRange { ^\unipolar }
+}
+
 Clipper32 : UGen {
 	*ar {
 		arg in, lo=(-0.8), hi=0.8;
